@@ -1,73 +1,36 @@
 from django.shortcuts import render
-
-# Create your views here
-from battlePy.tournament import Tournament
-# from battlePy.players.random_player import RandomPlayer
-from battlePy.improved_random_player import ImprovedRandomPlayer
-from battlePy.player import Player
-from battlePy.config import (BOARD_WIDTH,
-                    BOARD_HEIGHT)
-from battlePy.ship import UP, RIGHT
-from battlePy.random_player import RandomPlayer
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
-
 import random
-import pickle
-
-
-def play(player1,player2):
-    tournament = Tournament(player1, player2, 100)
-    tournament.start()
-    tournament.printStats()
-
+import subprocess
 
 # @require_http_methods(['POST',])
 @csrf_exempt
-def battle(request):
-    print 'test'
-    # pickled_player = request.POST.get('dumped')
-    # player = pickle.loads(pickled_player)
-    player = RandomPlayer()
-    # player2 = pickle.loads(pickled_player)
-    # print player
-    code ="""
-class ImprovedRandomPlayer2(Player):
-    def initPlayer(self):
-        self.name = 'ImprovedRandomPlayer'
+def battle(request, player1, player2):
+    command = "docker build -t battlecontainer /home/ubuntu/"
+    command2 = "docker run -it --rm battlecontainer python battlePy/demo.py"
+    command = command.split()
+    command2 = command2.split()
+    command2.append(player1)
+    command2.append(player2)
+    subprocess.call(command)
+    output = subprocess.check_output(command2)
+    try:
+        output = output.strip()
+        output = output.split(' === ')
+        result = {'games_played': output[0], output[1]: {'win':output[2]}, output[3]: {'win':output[4]}}
+        return JsonResponse({'result':result})
+    except:
+        return
 
-    def newGame(self):
-        self.shots = set()
-
-    def placeShips(self):
-        for ship in self.ships:
-            isValid = False
-            while not isValid:
-                orientation = random.choice([UP, RIGHT])
-                if orientation == UP:
-                    location = (random.randint(0, BOARD_WIDTH - 1),
-                                random.randint(0, BOARD_HEIGHT - 1 - ship.size))
-                else:
-                    location = (random.randint(0, BOARD_WIDTH - 1 - ship.size),
-                                random.randint(0, BOARD_HEIGHT - 1))
-                ship.placeShip(location, orientation)
-
-                if self.isShipPlacedLegally(ship):
-                    isValid = True
-
-    def fireShot(self):
-        shot = (random.randint(0, BOARD_WIDTH - 1),
-                random.randint(0, BOARD_HEIGHT - 1))
-
-        while shot in self.shots:
-            shot = (random.randint(0, BOARD_WIDTH - 1),
-                    random.randint(0, BOARD_HEIGHT - 1))
-        self.shots.add(shot)
-        return shot
-    """
-    exec code
-    tournament = Tournament(ImprovedRandomPlayer2(),ImprovedRandomPlayer(),100)
-    tournament.start()
-    result = tournament.getStats()
-    print result
-    return JsonResponse(result)
+@csrf_exempt
+def upload(request):
+    f = request.POST.get('file')
+    name = request.POST.get('name')
+    if os.path.isfile('upload/'+name+'.py')==False:
+        with open('upload/'+name+'.py', 'wb+') as destination:
+            destination.write(f)
+        return battle('','ImprovedRandomPlayer', name)
+    else:
+        return JsonResponse({'message': 'Name already taken, try appending numbers'})
+    # return JsonResponse({'message':'uploaded successfully'})
